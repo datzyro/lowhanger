@@ -46,6 +46,8 @@ go install github.com/projectdiscovery/katana/cmd/katana@latest
 # testssl.sh (TLS scanner)
 git clone https://github.com/drwetter/testssl.sh
 # add testssl.sh to PATH or set testssl_path in templates/ssl-check.yaml
+
+ln -s ~/testssl.sh/testssl.sh /usr/local/bin/testssl.sh 
 ```
 
 ## Adding a new module
