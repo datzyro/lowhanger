@@ -1,0 +1,93 @@
+id:          security-headers
+name:        Missing Security Headers
+severity:    low
+description: |
+  Checks every crawled endpoint for the presence of recommended HTTP security
+  headers. Reports the endpoint with the highest number of missing headers,
+  plus a full per-header breakdown across all endpoints.
+
+module:      SecurityHeadersModule
+
+# How many endpoints to check (0 = all crawled)
+max_endpoints: 0
+
+# Crawl depth passed to katana / built-in crawler
+crawl_depth: 3
+
+# Headers to check. Each entry:
+#   name       : exact header name (case-insensitive match)
+#   severity   : finding severity if missing
+#   required   : if false, flag as informational only
+#   note       : guidance shown in finding
+headers:
+  - name: Strict-Transport-Security
+    severity: medium
+    required: true
+    note: >
+      HSTS is missing. Without it, browsers may connect over HTTP first,
+      enabling SSL-stripping attacks. Recommended value:
+      max-age=31536000; includeSubDomains; preload
+
+  - name: Content-Security-Policy
+    severity: medium
+    required: true
+    note: >
+      CSP is missing. This increases XSS risk significantly as there is
+      no allowlist controlling which scripts/resources may execute.
+
+  - name: X-Frame-Options
+    severity: medium
+    required: true
+    note: >
+      X-Frame-Options is missing. The page may be embeddable in iframes,
+      enabling clickjacking. Prefer CSP frame-ancestors over this header
+      for modern browser coverage.
+
+  - name: X-Content-Type-Options
+    severity: low
+    required: true
+    note: >
+      X-Content-Type-Options: nosniff is missing. Browsers may MIME-sniff
+      responses and execute content in an unintended context.
+
+  - name: Referrer-Policy
+    severity: low
+    required: true
+    note: >
+      Referrer-Policy is missing. Sensitive URL parameters may leak to
+      third parties via the Referer header on cross-origin navigation.
+
+  - name: Permissions-Policy
+    severity: low
+    required: false
+    note: >
+      Permissions-Policy (formerly Feature-Policy) is missing. Camera,
+      microphone, and geolocation may be accessible to embedded third
+      parties.
+
+  - name: X-XSS-Protection
+    severity: info
+    required: false
+    note: >
+      X-XSS-Protection is absent. This header is deprecated and disabled
+      in modern browsers; flag for completeness only.
+
+  - name: Cache-Control
+    severity: low
+    required: false
+    note: >
+      Cache-Control is missing. Sensitive responses may be cached by
+      browsers or proxies. Recommended for authenticated endpoints:
+      no-store, no-cache, must-revalidate.
+
+remediation: |
+  Add the missing headers in your web server or application configuration.
+  For nginx: add_header directives in the server/location block.
+  For Apache: Header set directives in httpd.conf or .htaccess.
+  For application frameworks, use a security middleware such as Helmet (Node)
+  or Django's SecurityMiddleware.
+
+tags:
+  - headers
+  - hardening
+  - owasp-a05

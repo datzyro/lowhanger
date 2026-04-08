@@ -1,0 +1,21 @@
+id:          http-redirect
+name:        HTTP to HTTPS Redirect
+severity:    medium
+description: |
+  Checks whether the target enforces HTTPS by:
+    1. Requesting the root over plain HTTP and verifying a 3xx redirect to HTTPS
+    2. Checking whether HSTS is present on the HTTPS response
+    3. Checking for mixed-content indicators in the HTTPS response body
+
+module:      HttpRedirectModule
+
+remediation: |
+  Configure the web server to redirect all HTTP traffic to HTTPS (301).
+  Also set Strict-Transport-Security with a long max-age so browsers
+  cache the redirect and never attempt plain HTTP.
+
+tags:
+  - ssl
+  - https
+  - hsts
+  - owasp-a02

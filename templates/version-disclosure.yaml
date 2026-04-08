@@ -1,0 +1,103 @@
+id:          version-disclosure
+name:        Version/Technology Disclosure
+severity:    low
+description: |
+  Checks for software version and technology disclosure across:
+    1. Response headers (Server, X-Powered-By, X-AspNet-Version, etc.)
+    2. Deliberately triggered error pages (404, 403, 500) which often
+       expose version strings in default error templates
+    3. Response bodies of crawled endpoints (regex patterns for known
+       version string formats)
+
+module:      VersionDisclosureModule
+
+crawl_depth: 2
+
+# Headers that commonly leak version/technology info
+disclosure_headers:
+  - Server
+  - X-Powered-By
+  - X-AspNet-Version
+  - X-AspNetMvc-Version
+  - X-Runtime
+  - X-Version
+  - X-Generator
+  - Via
+  - X-Drupal-Cache
+  - X-Drupal-Dynamic-Cache
+  - X-Magento-Cache-Debug
+  - X-Shopify-Stage
+  - X-Wp-Total
+  - Liferay-Portal
+  - MicrosoftSharePointTeamServices
+  - X-OWA-Version
+  - X-Confluence-Request-Time
+
+# Random paths used to trigger error pages (404s reveal server banners)
+error_paths:
+  - /this-path-does-not-exist-lowhanger-probe
+  - /lowhanger-404-probe.php
+  - /lowhanger-probe/../../../../etc/passwd
+
+# Regex patterns to detect version strings in response bodies
+# Each entry: {pattern, technology, severity}
+body_patterns:
+  - pattern: 'Apache(?:/| )([\d.]+)'
+    technology: Apache
+    severity: low
+  - pattern: 'nginx(?:/| )([\d.]+)'
+    technology: nginx
+    severity: low
+  - pattern: 'PHP(?:/| )([\d.]+)'
+    technology: PHP
+    severity: low
+  - pattern: 'OpenSSL(?:/| )([\d.]+)'
+    technology: OpenSSL
+    severity: low
+  - pattern: 'Microsoft-IIS(?:/| )([\d.]+)'
+    technology: IIS
+    severity: low
+  - pattern: 'Jetty(?:/| )([\d.]+)'
+    technology: Jetty
+    severity: low
+  - pattern: 'Tomcat(?:/| )([\d.]+)'
+    technology: Tomcat
+    severity: low
+  - pattern: 'JBoss(?:/| )([\d.]+)'
+    technology: JBoss
+    severity: medium
+  - pattern: 'WebLogic(?:/| )([\d.]+)'
+    technology: WebLogic
+    severity: medium
+  - pattern: 'Express\s+([\d.]+)'
+    technology: Express.js
+    severity: low
+  - pattern: 'Django(?:/| )([\d.]+)'
+    technology: Django
+    severity: low
+  - pattern: 'Rails(?:/| )([\d.]+)'
+    technology: Ruby on Rails
+    severity: low
+  - pattern: 'WordPress\s+([\d.]+)'
+    technology: WordPress
+    severity: low
+  - pattern: 'Drupal\s+([\d.]+)'
+    technology: Drupal
+    severity: low
+  - pattern: 'Powered by (.+?)\s+v?([\d.]+)'
+    technology: Generic
+    severity: info
+
+remediation: |
+  Suppress version information from all HTTP response headers.
+  For nginx: server_tokens off;
+  For Apache: ServerTokens Prod; ServerSignature Off;
+  For PHP: expose_php = Off (in php.ini)
+  For IIS: remove the X-Powered-By and Server headers via URL Rewrite
+  or custom HTTP response headers configuration.
+  Customise default error pages so they do not render server banners.
+
+tags:
+  - disclosure
+  - fingerprinting
+  - owasp-a05

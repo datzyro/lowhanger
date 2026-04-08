@@ -1,0 +1,55 @@
+id:          cors
+name:        CORS Misconfiguration
+severity:    medium
+description: |
+  Tests CORS policy across all crawled endpoints by sending crafted
+  Origin headers and analysing the Access-Control-Allow-Origin and
+  Access-Control-Allow-Credentials response headers.
+
+  Severity escalation:
+    CRITICAL  — ACAO reflects attacker origin AND ACAC: true
+                 (credentialed cross-origin reads — worst case)
+    HIGH      — ACAO reflects attacker origin, no credentials
+                 (cross-origin reads without cookies/auth)
+    MEDIUM    — ACAO: * with ACAC: true
+                 (spec-invalid but some parsers accept it)
+    LOW       — ACAO: * without credentials
+                 (public data exposed cross-origin — usually intended but worth noting)
+    LOW       — null origin accepted with ACAC: true
+                 (sandbox iframe bypass)
+
+module:      CorsModule
+
+crawl_depth: 3
+
+# Origin values to inject
+# The engine will also try the null origin and a subdomain-prefix bypass
+test_origins:
+  - "https://evil.lowhanger.internal"
+  - "https://evil.com"
+
+# If true, also try subdomain-confusion bypass:
+#   Origin: https://<target>.evil.com   (suffix match bypass)
+#   Origin: https://evil.<target>       (prefix match bypass)
+subdomain_bypass: true
+
+# If true, test the null origin (for sandbox iframe bypass)
+test_null_origin: true
+
+remediation: |
+  Never use Access-Control-Allow-Origin: * for endpoints that return
+  sensitive data. Never reflect the request Origin header back without
+  validating it against an explicit server-side allowlist.
+  If credentials are required, you MUST use an explicit origin allowlist —
+  the spec prohibits ACAO: * with ACAC: true, but some frameworks implement
+  this insecurely anyway.
+  Recommended pattern:
+    1. Maintain an allowlist of trusted origins (config, not code)
+    2. On each request, check if Origin is in the allowlist
+    3. If yes, echo it back in ACAO; if no, omit the ACAO header entirely
+    4. Never trust prefix/suffix matching (e.g. ends-with check on origin)
+
+tags:
+  - cors
+  - misconfig
+  - owasp-a05

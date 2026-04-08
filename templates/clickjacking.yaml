@@ -1,0 +1,32 @@
+id:          clickjacking
+name:        Clickjacking
+severity:    medium
+description: |
+  Checks whether pages can be embedded in an iframe by an attacker.
+  Detection logic accounts for the fact that X-Frame-Options alone is
+  insufficient: ALLOW-FROM is ignored by modern browsers, and only
+  CSP frame-ancestors provides reliable cross-browser protection.
+
+module:      ClickjackingModule
+
+crawl_depth: 2
+
+# Verdicts emitted per endpoint:
+#
+#   VULNERABLE        — no protection at all
+#   VULNERABLE        — X-Frame-Options: ALLOW-FROM (deprecated, ignored by Chrome/Firefox)
+#   PARTIAL           — X-Frame-Options present but no CSP frame-ancestors
+#                       (legacy browsers protected, modern ones are not reliably covered)
+#   PROTECTED         — CSP frame-ancestors: none | 'self' | explicit origin list
+
+remediation: |
+  Set Content-Security-Policy: frame-ancestors 'none' (or 'self' if same-origin
+  embedding is required). Retain X-Frame-Options: DENY as a fallback for older
+  browsers. Do NOT rely solely on X-Frame-Options: ALLOW-FROM — it is not
+  supported by Chrome or Firefox.
+
+tags:
+  - clickjacking
+  - iframe
+  - headers
+  - owasp-a05
