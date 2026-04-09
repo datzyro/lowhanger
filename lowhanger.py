@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 """
 lowhanger.py — Low-hanging fruit pentesting scanner
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Templates available:
-  ssl-check              Deprecated TLS versions (wraps testssl.sh)
+Scan modes:
+  default (crawl)   : Crawl the target with katana/BFS, filter to HTML pages,
+                      run all checks against every discovered page.
+  --no-crawl        : Skip crawling — check root URL only. Fast surface scan.
+
+Templates:
+  ssl-check              Deprecated TLS 1.0 / 1.1
   http-redirect          HTTP→HTTPS enforcement + HSTS quality
-  security-headers       Missing security headers across all crawled endpoints
+  version-disclosure     Version/tech leakage in headers and error pages
+  security-headers       Missing HSTS / X-Frame / X-Content-Type / CSP
   clickjacking           X-Frame-Options + CSP frame-ancestors analysis
+  cors                   CORS misconfiguration (wildcard, reflected origin, null)
   host-header-redirect   Open redirect via Host header injection (12 techniques)
-
-External tools used (optional — graceful fallback if absent):
-  katana       Endpoint crawler   https://github.com/projectdiscovery/katana
-  testssl.sh   TLS scanner        https://testssl.sh
-
-Usage:
-  python lowhanger.py -t https://example.com
-  python lowhanger.py -t https://example.com --templates security-headers clickjacking
-  python lowhanger.py -l targets.txt --templates all -o results.json --format json
-  python lowhanger.py -t https://example.com --proxy http://127.0.0.1:8080
 """
 
 import argparse
@@ -47,13 +43,12 @@ def parse_args():
         prog="lowhanger",
         description="Low-hanging fruit pentesting scanner — template-based.",
         formatter_class=argparse.RawTextHelpFormatter,
-        epilog="\n".join([
-            "Templates: " + ", ".join(ALL_TEMPLATES),
-            "",
-            "External tools (optional):",
-            "  katana      : endpoint crawler (github.com/projectdiscovery/katana)",
-            "  testssl.sh  : TLS scanner      (testssl.sh)",
-        ]),
+        epilog=(
+            "Scan modes:\n"
+            "  default      : crawl entire app, check every HTML page\n"
+            "  --no-crawl   : root URL only, fast surface check\n\n"
+            "Templates: " + ", ".join(ALL_TEMPLATES)
+        ),
     )
 
     tg = p.add_argument_group("Targets")
@@ -64,32 +59,38 @@ def parse_args():
                     action="append", default=[],
                     help="File with one target per line (repeatable)")
 
+    mg = p.add_argument_group("Mode")
+    mode_ex = mg.add_mutually_exclusive_group()
+    mode_ex.add_argument("--no-crawl", dest="no_crawl", action="store_true", default=False,
+                         help=(
+                             "Surface scan — skip crawling, check root URL only.\n"
+                             "Fast but may miss headers/issues on deeper pages."
+                         ))
+    mode_ex.add_argument("--crawl", dest="no_crawl", action="store_false",
+                         help="Full crawl mode (default)")
+
     sg = p.add_argument_group("Scan")
     sg.add_argument("--templates", dest="templates", metavar="ID",
                     nargs="+", default=["all"],
-                    help="Template IDs to run (default: all)\n"
-                         "Available: {}".format(" ".join(ALL_TEMPLATES)))
+                    help="Template IDs (default: all)\nAvailable: {}".format(
+                        " ".join(ALL_TEMPLATES)))
     sg.add_argument("--canary", dest="canary", metavar="DOMAIN", default=None,
-                    help="Override canary domain for host-header module\n"
-                         "(use Burp Collaborator / interactsh for OOB detection)")
+                    help="Override canary for host-header module\n"
+                         "(use Burp Collaborator / interactsh for OOB)")
     sg.add_argument("--crawl-depth", dest="crawl_depth", type=int, default=None,
-                    help="Override crawl depth for all templates (default: per-template)")
+                    help="Crawl depth (default: 3, ignored with --no-crawl)")
     sg.add_argument("--timeout", dest="timeout", type=int, default=10,
                     help="Per-request timeout in seconds (default: 10)")
     sg.add_argument("--proxy", dest="proxy", metavar="URL", default=None,
                     help="HTTP proxy (e.g. http://127.0.0.1:8080)")
     sg.add_argument("--follow-redirects", dest="follow_redirects",
-                    action="store_true", default=False,
-                    help="Follow redirects (most checks need raw 3xx — use carefully)")
+                    action="store_true", default=False)
 
     og = p.add_argument_group("Output")
-    og.add_argument("-o", "--output", dest="output", metavar="FILE", default=None,
-                    help="Write results to file")
+    og.add_argument("-o", "--output", dest="output", metavar="FILE", default=None)
     og.add_argument("--format", dest="fmt",
-                    choices=["pretty", "plain", "json"], default="pretty",
-                    help="Output format (default: pretty)")
-    og.add_argument("-v", "--verbose", action="store_true", default=False,
-                    help="Verbose output")
+                    choices=["pretty", "plain", "json"], default="pretty")
+    og.add_argument("-v", "--verbose", action="store_true", default=False)
 
     return p.parse_args()
 
@@ -118,30 +119,30 @@ def main():
         reporter.error("Target list is empty.")
         sys.exit(1)
 
-    reporter.info("Loaded {} unique target(s)".format(len(targets)))
+    mode = "no-crawl (surface)" if args.no_crawl else "crawl"
+    reporter.info("Loaded {} target(s) — mode: {}".format(len(targets), mode))
 
     proxies = {}
     if args.proxy:
         proxies = {"http": args.proxy, "https": args.proxy}
-        reporter.info("Routing through proxy: {}".format(args.proxy))
+        reporter.info("Proxy: {}".format(args.proxy))
 
     engine = Engine(
-        reporter=reporter,
-        template_filter=args.templates,
-        timeout=args.timeout,
-        follow_redirects=args.follow_redirects,
-        proxies=proxies,
+        reporter         = reporter,
+        template_filter  = args.templates,
+        crawl_mode       = not args.no_crawl,
+        crawl_depth      = args.crawl_depth,
+        timeout          = args.timeout,
+        follow_redirects = args.follow_redirects,
+        proxies          = proxies,
     )
 
-    # Apply overrides to loaded templates
-    for tmpl in engine._templates:
-        if args.canary and tmpl.get("id") == "host-header-redirect":
-            tmpl["canary"] = args.canary
-        if args.crawl_depth is not None and "crawl_depth" in tmpl:
-            tmpl["crawl_depth"] = args.crawl_depth
-
+    # Apply canary override
     if args.canary:
-        reporter.info("Canary override: {}".format(args.canary))
+        for tmpl in engine._templates:
+            if tmpl.get("id") == "host-header-redirect":
+                tmpl["canary"] = args.canary
+        reporter.info("Canary: {}".format(args.canary))
 
     engine.scan(targets)
     reporter.print_summary()

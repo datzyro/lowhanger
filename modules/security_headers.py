@@ -1,47 +1,39 @@
 """
 modules/security_headers.py
 Module: SecurityHeadersModule
+
+Receives a pre-crawled, HTML-filtered URL list from the engine.
+No internal crawling.
 """
 
 from modules.base     import BaseModule
 from core.target      import Target
 from core.http_client import HttpClient
 from core.reporter    import Reporter, Finding
-from core.crawler     import crawl
 
 
 class SecurityHeadersModule(BaseModule):
 
-    def run(self, target: Target, client: HttpClient, reporter: Reporter) -> None:
-        header_defs   = self.template.get("headers", [])
-        max_endpoints = self.template.get("max_endpoints", 0)
-        crawl_depth   = self.template.get("crawl_depth", 3)
+    def run(self, target: Target, client: HttpClient,
+            reporter: Reporter, urls: list = None) -> None:
 
+        header_defs = self.template.get("headers", [])
         if not header_defs:
             reporter.warn("[security-headers] No headers configured in template.")
             return
 
-        reporter.info("[security-headers] Crawling {} (depth={})...".format(
-            target.url, crawl_depth))
+        if not urls:
+            reporter.info("[security-headers] No URLs to check.")
+            return
 
-        urls = crawl(
-            target,
-            depth   = crawl_depth,
-            timeout = client.timeout,
-            proxy   = list(client.proxies.values())[0] if client.proxies else None,
-            verbose = reporter.verbose,
-        )
-
-        if max_endpoints and len(urls) > max_endpoints:
-            urls = urls[:max_endpoints]
-
-        reporter.info("[security-headers] {} endpoint(s) to check".format(len(urls)))
+        reporter.info("[security-headers] Checking {} page(s) for {} header(s)".format(
+            len(urls), len(header_defs)))
 
         # results[url] = list of missing header names
         results = {}
 
         for url in urls:
-            reporter.debug("  checking {}".format(url))
+            reporter.debug("  {}".format(url))
             try:
                 resp = client.get(url)
             except (ConnectionError, TimeoutError) as e:
@@ -57,26 +49,25 @@ class SecurityHeadersModule(BaseModule):
                 results[url] = missing
 
         if not results:
-            reporter.info("[security-headers] All endpoints have all required headers.")
+            reporter.info("[security-headers] All pages have required headers.")
             return
 
         sorted_results = sorted(results.items(), key=lambda x: len(x[1]), reverse=True)
         worst_url, worst_missing = sorted_results[0]
 
-        # Worst offender — one summary finding
+        # Worst offender summary
         reporter.add_finding(Finding(
             template_id = self.id,
             name        = "Missing Security Headers — Worst Offender",
             severity    = "medium",
             target      = target.url,
             affected    = worst_url,
-            technique   = "Security header audit ({} endpoints crawled)".format(len(urls)),
+            technique   = "Security header audit ({} pages checked)".format(len(urls)),
             cause       = "Missing {}/{} required headers: {}".format(
-                len(worst_missing), len(header_defs),
-                ", ".join(worst_missing)),
+                len(worst_missing), len(header_defs), ", ".join(worst_missing)),
         ))
 
-        # Per-header findings — group by header name, one finding per missing header
+        # Per-header breakdown
         header_to_urls = {}
         for url, missing_list in results.items():
             for hname in missing_list:
@@ -100,11 +91,11 @@ class SecurityHeadersModule(BaseModule):
                 severity    = severity,
                 target      = target.url,
                 affected    = affected_urls[0] if len(affected_urls) == 1
-                              else "{} endpoints".format(len(affected_urls)),
+                              else "{} pages".format(len(affected_urls)),
                 technique   = "Security header audit",
-                cause       = "{} header absent on {} endpoint(s):\n              {}".format(
+                cause       = "{} absent on {} page(s):\n              {}".format(
                     hname, len(affected_urls), url_block),
             ))
 
-        reporter.info("[security-headers] Done. {} endpoint(s) with missing headers.".format(
+        reporter.info("[security-headers] Done. {} page(s) with missing headers.".format(
             len(results)))

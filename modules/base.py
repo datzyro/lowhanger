@@ -1,41 +1,27 @@
 """
-modules/base.py — BaseModule contract that every lowhanger module must satisfy.
+modules/base.py — BaseModule contract.
 
-A module maps 1:1 to a YAML template. The engine:
-  1. Loads the YAML template
-  2. Instantiates the matching Python module class
-  3. Calls module.run(target, client, reporter)
-
-Modules are discovered by template `module` field matching the class name
-(case-insensitive) inside the modules/ package.
+run() now receives an optional `urls` list:
+  - In crawl mode   : pre-crawled, HTML-filtered URL list from the engine
+  - In no-crawl mode: [target.url] — only the root URL
+  - None            : module should not crawl at all (non-crawl modules
+                      like ssl-check and http-redirect ignore this param)
 """
 
 from abc import ABC, abstractmethod
-from core.target   import Target
+from core.target      import Target
 from core.http_client import HttpClient
-from core.reporter import Reporter
+from core.reporter    import Reporter
 
 
 class BaseModule(ABC):
-    """
-    Abstract base for all lowhanger check modules.
-
-    Subclasses MUST implement `run()`.
-    Template metadata is injected by the engine at instantiation.
-    """
 
     def __init__(self, template: dict):
-        """
-        Parameters
-        ----------
-        template : parsed YAML dict for this module
-        """
         self.template    = template
         self.id          = template.get("id",          "unknown")
         self.name        = template.get("name",        "Unknown Check")
         self.severity    = template.get("severity",    "info")
         self.description = template.get("description", "")
-        self.remediation = template.get("remediation", "")
         self.tags        = template.get("tags",        [])
 
     @abstractmethod
@@ -44,28 +30,17 @@ class BaseModule(ABC):
         target:   Target,
         client:   HttpClient,
         reporter: Reporter,
+        urls:     list = None,
     ) -> None:
         """
-        Execute all checks for this module against `target`.
+        Execute checks against `target`.
 
-        Findings are emitted by calling reporter.add_finding(Finding(...)).
-        Errors/warnings via reporter.error() / reporter.warn().
-        Verbose progress via reporter.info() / reporter.debug().
+        urls : pre-crawled HTML page list supplied by the engine.
+               None  → module is non-crawl (ssl-check, http-redirect, host-header).
+               []    → no pages found during crawl.
+               [..] → HTML pages to run per-page checks on.
+
+        Crawl-based modules MUST use `urls` instead of crawling themselves.
+        Non-crawl modules ignore `urls` entirely.
         """
         ...
-
-    # ------------------------------------------------------------------ #
-    # Helpers available to all subclasses                                 #
-    # ------------------------------------------------------------------ #
-
-    def _finding_kwargs(self, technique: str, evidence: str, detail: str = "") -> dict:
-        """Build the common kwargs for a Finding."""
-        return dict(
-            template_id  = self.id,
-            name         = self.name,
-            severity     = self.severity,
-            technique    = technique,
-            evidence     = evidence,
-            detail       = detail,
-            remediation  = self.remediation,
-        )

@@ -27,7 +27,7 @@ OFFERED_MARKER = "offered (deprecated)"
 
 class SslCheckModule(BaseModule):
 
-    def run(self, target: Target, client: HttpClient, reporter: Reporter) -> None:
+    def run(self, target: Target, client: HttpClient, reporter: Reporter, urls: list = None) -> None:
         host = target.host
         port = target.port or 443
         reporter.info("[ssl-check] Checking deprecated TLS on {}:{}".format(host, port))

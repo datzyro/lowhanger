@@ -70,7 +70,7 @@ def _parse_raw_response(raw: str) -> tuple:
 
 class HostHeaderRedirectModule(BaseModule):
 
-    def run(self, target: Target, client: HttpClient, reporter: Reporter) -> None:
+    def run(self, target: Target, client: HttpClient, reporter: Reporter, urls: list = None) -> None:
         canary     = self.template.get("canary", "evil.lowhanger.internal")
         techniques = set(self.template.get("techniques", []))
         check_body = self.template.get("detection", {}).get("body_reflection", True)

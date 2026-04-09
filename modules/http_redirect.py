@@ -15,7 +15,7 @@ _MIN_HSTS_AGE    = 31536000
 
 class HttpRedirectModule(BaseModule):
 
-    def run(self, target: Target, client: HttpClient, reporter: Reporter) -> None:
+    def run(self, target: Target, client: HttpClient, reporter: Reporter, urls: list = None) -> None:
         reporter.info("[http-redirect] Checking HTTPS enforcement for {}".format(target.host))
 
         http_url = target.http_url

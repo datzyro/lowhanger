@@ -1,14 +1,14 @@
 """
 modules/cors.py
 Module: CorsModule
+
+Receives a pre-crawled, HTML-filtered URL list from the engine.
 """
 
-from collections import defaultdict
 from modules.base     import BaseModule
 from core.target      import Target
 from core.http_client import HttpClient
 from core.reporter    import Reporter, Finding
-from core.crawler     import crawl
 
 _CRED_HEADER = "access-control-allow-credentials"
 _ACAO_HEADER = "access-control-allow-origin"
@@ -18,7 +18,7 @@ def _normalise(headers) -> dict:
     return {k.lower(): v.strip() for k, v in headers.items()}
 
 
-def _classify(acao: str, has_credentials: bool, injected_origin: str) -> tuple:
+def _classify(acao: str, has_credentials: bool, injected_origin: str):
     """Returns (severity, name, cause) or (None, None, None) if benign."""
     if not acao:
         return None, None, None
@@ -30,25 +30,23 @@ def _classify(acao: str, has_credentials: bool, injected_origin: str) -> tuple:
             return ("critical",
                     "CORS — Reflected Origin + Credentials",
                     "Origin: {}  →  ACAO: {}  |  ACAC: true".format(injected_origin, acao))
-        else:
-            return ("high",
-                    "CORS — Reflected Origin",
-                    "Origin: {}  →  ACAO: {}".format(injected_origin, acao))
+        return ("high",
+                "CORS — Reflected Origin",
+                "Origin: {}  →  ACAO: {}".format(injected_origin, acao))
 
     if acao_lower == "*":
         if has_credentials:
             return ("medium",
                     "CORS — Wildcard ACAO + Credentials (spec-invalid)",
-                    "ACAO: *  |  ACAC: true  (browsers reject this combination — verify with real client)")
-        else:
-            return ("low",
-                    "CORS — Wildcard ACAO",
-                    "ACAO: *  (all origins permitted — confirm no sensitive data exposed)")
+                    "ACAO: *  |  ACAC: true")
+        return ("low",
+                "CORS — Wildcard ACAO",
+                "ACAO: *")
 
     if acao_lower == "null" and injected_origin == "null":
         if has_credentials:
             return ("low",
-                    "CORS — null Origin Accepted + Credentials",
+                    "CORS — null Origin + Credentials",
                     "Origin: null  →  ACAO: null  |  ACAC: true  (sandboxed iframe bypass)")
 
     return None, None, None
@@ -56,8 +54,9 @@ def _classify(acao: str, has_credentials: bool, injected_origin: str) -> tuple:
 
 class CorsModule(BaseModule):
 
-    def run(self, target: Target, client: HttpClient, reporter: Reporter) -> None:
-        crawl_depth      = self.template.get("crawl_depth", 3)
+    def run(self, target: Target, client: HttpClient,
+            reporter: Reporter, urls: list = None) -> None:
+
         test_origins     = self.template.get("test_origins", ["https://evil.lowhanger.internal"])
         subdomain_bypass = self.template.get("subdomain_bypass", True)
         test_null        = self.template.get("test_null_origin", True)
@@ -70,12 +69,12 @@ class CorsModule(BaseModule):
             origins.append("null")
         origins = list(dict.fromkeys(origins))
 
-        reporter.info("[cors] Crawling {} (depth={})...".format(target.url, crawl_depth))
-        urls = crawl(target, depth=crawl_depth, timeout=client.timeout,
-                     proxy=list(client.proxies.values())[0] if client.proxies else None,
-                     verbose=reporter.verbose)
+        if not urls:
+            reporter.info("[cors] No URLs to check.")
+            return
 
-        reporter.info("[cors] {} endpoint(s) × {} origin(s)".format(len(urls), len(origins)))
+        reporter.info("[cors] Checking {} page(s) × {} origin(s)".format(
+            len(urls), len(origins)))
 
         seen = set()
 

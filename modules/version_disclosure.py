@@ -1,6 +1,9 @@
 """
 modules/version_disclosure.py
 Module: VersionDisclosureModule
+
+Receives a pre-crawled, HTML-filtered URL list from the engine.
+Also appends error-probe URLs (404 triggers) to surface server banners.
 """
 
 import re
@@ -9,13 +12,13 @@ from modules.base     import BaseModule
 from core.target      import Target
 from core.http_client import HttpClient
 from core.reporter    import Reporter, Finding
-from core.crawler     import crawl
 
 
 class VersionDisclosureModule(BaseModule):
 
-    def run(self, target: Target, client: HttpClient, reporter: Reporter) -> None:
-        crawl_depth        = self.template.get("crawl_depth", 2)
+    def run(self, target: Target, client: HttpClient,
+            reporter: Reporter, urls: list = None) -> None:
+
         disclosure_headers = self.template.get("disclosure_headers", [])
         error_paths        = self.template.get("error_paths", [])
         body_patterns_cfg  = self.template.get("body_patterns", [])
@@ -32,20 +35,15 @@ class VersionDisclosureModule(BaseModule):
                 reporter.warn("[version-disclosure] Bad pattern '{}': {}".format(
                     bp.get("pattern"), e))
 
-        reporter.info("[version-disclosure] Crawling {} (depth={})...".format(
-            target.url, crawl_depth))
-
-        urls       = crawl(target, depth=crawl_depth, timeout=client.timeout,
-                           proxy=list(client.proxies.values())[0] if client.proxies else None,
-                           verbose=reporter.verbose)
+        # Base URL list from engine + dedicated error probes
+        base_urls  = list(urls) if urls else [target.url]
         error_urls = [target.origin + p for p in error_paths]
-        all_urls   = list(dict.fromkeys(urls + error_urls))
+        all_urls   = list(dict.fromkeys(base_urls + error_urls))
 
-        reporter.info("[version-disclosure] {} endpoint(s) + {} error probe(s)".format(
-            len(urls), len(error_urls)))
+        reporter.info("[version-disclosure] Checking {} page(s) + {} error probe(s)".format(
+            len(base_urls), len(error_urls)))
 
         # hits[key] = [(url, cause_string)]
-        # key = ("header", header_name, header_value) | ("body", technology, version)
         hits = defaultdict(list)
 
         for url in all_urls:
@@ -90,15 +88,14 @@ class VersionDisclosureModule(BaseModule):
             if vector == "header":
                 sev       = _header_severity(label, value)
                 technique = "Response header disclosure"
-                # cause = the actual header line, then which URLs it was seen on
-                cause = "{}: {}\n              Found on: {}".format(label, value, url_block)
+                cause     = "{}: {}\n              Found on: {}".format(
+                    label, value, url_block)
             else:
                 pat_match = next((p for p in compiled_patterns
                                   if p["technology"] == label), None)
                 sev       = pat_match["severity"] if pat_match else "low"
                 technique = "Response body pattern match"
-                # cause = the matched string + context snippet + URLs
-                cause = "{} version string: {}\n              Context: ...{}...\n              Found on: {}".format(
+                cause     = "{} version string: {}\n              Context: ...{}...\n              Found on: {}".format(
                     label, value, occurrences[0][1], url_block)
 
             reporter.add_finding(Finding(
@@ -107,7 +104,7 @@ class VersionDisclosureModule(BaseModule):
                 severity    = sev,
                 target      = target.url,
                 affected    = urls_affected[0] if len(urls_affected) == 1
-                              else "{} endpoints".format(len(urls_affected)),
+                              else "{} pages".format(len(urls_affected)),
                 technique   = technique,
                 cause       = cause,
             ))
