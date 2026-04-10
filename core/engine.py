@@ -125,6 +125,7 @@ class Engine:
             try:
                 module.run(target, self._client, self.reporter, urls=urls_arg)
             except Exception as e:
+                self.reporter.error(e)
                 self.reporter.error("Module {} crashed on {}: {}".format(
                     tid, target.url, e))
 

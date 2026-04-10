@@ -148,12 +148,35 @@ class Reporter:
             col, label, Style.RESET_ALL,
             Style.BRIGHT, f.name, Style.RESET_ALL,
         ))
+
+        # Single-line fields
         print("  {:<12}: {}".format("Target",    f.target))
-        print("  {:<12}: {}".format("Affected",  f.affected))
         print("  {:<12}: {}".format("Technique", f.technique))
-        print("  {:<12}: {}".format("Cause",     f.cause))
+
+        # Affected — may be multiline (each line already indented by the module)
+        affected_lines = f.affected.splitlines()
+        if len(affected_lines) == 1:
+            print("  {:<12}: {}".format("Affected", f.affected))
+        else:
+            print("  {:<12}:".format("Affected"))
+            for line in affected_lines:
+                print("  {}".format(line))
+
+        # Cause — may be multiline (e.g. colored header list)
+        cause_lines = f.cause.splitlines()
+        if len(cause_lines) == 1:
+            print("  {:<12}: {}".format("Cause", f.cause))
+        else:
+            print("  {:<12}:".format("Cause"))
+            for line in cause_lines:
+                print("  {}".format(line))
 
     def _write_output(self):
+        import re as _re
+        _ansi = _re.compile(r'\x1b\[[0-9;]*m')
+        def _strip(s):
+            return _ansi.sub('', s)
+
         try:
             if self.fmt == "json":
                 with open(self.output_file, "w") as fh:
@@ -162,10 +185,24 @@ class Reporter:
                 with open(self.output_file, "w") as fh:
                     for f in self.findings:
                         fh.write("[{}] {}\n".format(f.severity.upper(), f.name))
-                        fh.write("  {:<12}: {}\n".format("Target",    f.target))
-                        fh.write("  {:<12}: {}\n".format("Affected",  f.affected))
-                        fh.write("  {:<12}: {}\n".format("Technique", f.technique))
-                        fh.write("  {:<12}: {}\n".format("Cause",     f.cause))
+                        fh.write("  {:<12}: {}\n".format("Target",    _strip(f.target)))
+                        fh.write("  {:<12}: {}\n".format("Technique", _strip(f.technique)))
+                        # Multiline affected
+                        affected_lines = _strip(f.affected).splitlines()
+                        if len(affected_lines) == 1:
+                            fh.write("  {:<12}: {}\n".format("Affected", affected_lines[0]))
+                        else:
+                            fh.write("  {:<12}:\n".format("Affected"))
+                            for line in affected_lines:
+                                fh.write("  {}\n".format(line))
+                        # Multiline cause
+                        cause_lines = _strip(f.cause).splitlines()
+                        if len(cause_lines) == 1:
+                            fh.write("  {:<12}: {}\n".format("Cause", cause_lines[0]))
+                        else:
+                            fh.write("  {:<12}:\n".format("Cause"))
+                            for line in cause_lines:
+                                fh.write("  {}\n".format(line))
                         fh.write("\n")
             print("{}[+]{} Results written to {}".format(
                 Fore.GREEN, Style.RESET_ALL, self.output_file))

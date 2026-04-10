@@ -2,10 +2,12 @@
 modules/security_headers.py
 Module: SecurityHeadersModule
 
-Receives a pre-crawled, HTML-filtered URL list from the engine.
-No internal crawling.
+Single finding only — the endpoint with the most missing headers.
+Cause block shows each header in red (missing) or green (present).
+Affected block lists every endpoint that had at least one header missing.
 """
 
+from colorama import Fore, Style
 from modules.base     import BaseModule
 from core.target      import Target
 from core.http_client import HttpClient
@@ -29,7 +31,7 @@ class SecurityHeadersModule(BaseModule):
         reporter.info("[security-headers] Checking {} page(s) for {} header(s)".format(
             len(urls), len(header_defs)))
 
-        # results[url] = list of missing header names
+        # results[url] = {header_name: True (present) / False (missing)}
         results = {}
 
         for url in urls:
@@ -41,61 +43,59 @@ class SecurityHeadersModule(BaseModule):
                 continue
 
             resp_headers_lower = {k.lower(): v for k, v in resp.headers.items()}
-            missing = [
-                hdef["name"] for hdef in header_defs
-                if hdef["name"].lower() not in resp_headers_lower
-            ]
-            if missing:
-                results[url] = missing
+            url_result = {
+                hdef["name"]: hdef["name"].lower() in resp_headers_lower
+                for hdef in header_defs
+            }
+            # Only store URLs that have at least one missing header
+            if not all(url_result.values()):
+                results[url] = url_result
 
         if not results:
-            reporter.info("[security-headers] All pages have required headers.")
+            reporter.info("[security-headers] All pages have all required headers.")
             return
 
-        sorted_results = sorted(results.items(), key=lambda x: len(x[1]), reverse=True)
-        worst_url, worst_missing = sorted_results[0]
+        # Pick the worst offender — most missing headers
+        worst_url = max(results, key=lambda u: sum(1 for v in results[u].values() if not v))
+        worst_result = results[worst_url]
+        missing_count = sum(1 for v in worst_result.values() if not v)
 
-        # Worst offender summary
+        # Build the colored cause block
+        # Each header line: green tick if present, red cross if missing
+        cause_lines = []
+        for hname, present in worst_result.items():
+            if present:
+                cause_lines.append(
+                    "  {}✓  {}{}".format(Fore.GREEN, hname, Style.RESET_ALL))
+            else:
+                cause_lines.append(
+                    "  {}✗  {}{}".format(Fore.RED, hname, Style.RESET_ALL))
+
+        # All affected endpoints (any missing header) sorted by missing count desc
+        affected_sorted = sorted(
+            results.items(),
+            key=lambda x: sum(1 for v in x[1].values() if not v),
+            reverse=True,
+        )
+
+        affected_lines = []
+        for url, url_result in affected_sorted:
+            missing_here = [h for h, present in url_result.items() if not present]
+            affected_lines.append("  {}  [missing: {}]".format(
+                url, ", ".join(missing_here)))
+
+        cause = "\n".join(cause_lines)
+        affected_block = "\n".join(affected_lines)
+
         reporter.add_finding(Finding(
             template_id = self.id,
-            name        = "Missing Security Headers — Worst Offender",
+            name        = "Missing Security Headers",
             severity    = "medium",
             target      = target.url,
-            affected    = worst_url,
+            affected    = affected_block,
             technique   = "Security header audit ({} pages checked)".format(len(urls)),
-            cause       = "Missing {}/{} required headers: {}".format(
-                len(worst_missing), len(header_defs), ", ".join(worst_missing)),
+            cause       = cause,
         ))
-
-        # Per-header breakdown
-        header_to_urls = {}
-        for url, missing_list in results.items():
-            for hname in missing_list:
-                header_to_urls.setdefault(hname, []).append(url)
-
-        for hname, affected_urls in sorted(
-                header_to_urls.items(), key=lambda x: -len(x[1])):
-
-            hdef     = next((h for h in header_defs if h["name"] == hname), {})
-            severity = hdef.get("severity", "medium")
-
-            sample    = affected_urls[:5]
-            extra     = len(affected_urls) - len(sample)
-            url_block = "\n              ".join(sample)
-            if extra:
-                url_block += "\n              ... and {} more".format(extra)
-
-            reporter.add_finding(Finding(
-                template_id = self.id,
-                name        = "Missing Security Header — {}".format(hname),
-                severity    = severity,
-                target      = target.url,
-                affected    = affected_urls[0] if len(affected_urls) == 1
-                              else "{} pages".format(len(affected_urls)),
-                technique   = "Security header audit",
-                cause       = "{} absent on {} page(s):\n              {}".format(
-                    hname, len(affected_urls), url_block),
-            ))
 
         reporter.info("[security-headers] Done. {} page(s) with missing headers.".format(
             len(results)))

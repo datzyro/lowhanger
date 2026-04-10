@@ -83,7 +83,7 @@ class HttpClient:
         self._session.headers.update({"User-Agent": self.user_agent})
 
         # Disable built-in redirect following — we handle it ourselves
-        self._session.max_redirects = 0
+        self._session.max_redirects = MAX_REDIRECTS
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
