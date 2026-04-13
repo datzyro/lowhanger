@@ -48,6 +48,10 @@ git clone https://github.com/drwetter/testssl.sh
 # add testssl.sh to PATH or set testssl_path in templates/ssl-check.yaml
 
 ln -s ~/testssl.sh/testssl.sh /usr/local/bin/testssl.sh 
+
+# Install playwright and chromium for better Clickjacking check
+pip install playwright
+playwright install chromium
 ```
 
 ## Adding a new module
