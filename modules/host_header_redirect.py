@@ -222,7 +222,7 @@ class HostHeaderRedirectModule(BaseModule):
         resp    = client.get(target.url, headers={"Host": crafted})
         self._check(resp, canary, target, reporter,
                     "Host: {} (suffix bypass)".format(crafted), check_body)
-
+# change few funcs to test the raw request/response parsing and detection logic 
     def _tech_https_redirect_abuse(self, target, canary, client, reporter, check_body):
         http_url = target.http_url
         variants = [
