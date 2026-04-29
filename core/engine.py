@@ -69,6 +69,7 @@ class Engine:
         timeout:          int  = 10,
         follow_redirects: bool = False,
         proxies:          dict = None,
+        request_headers:  dict = None,
     ):
         self.reporter         = reporter
         self.template_filter  = template_filter
@@ -77,12 +78,14 @@ class Engine:
         self.timeout          = timeout
         self.follow_redirects = follow_redirects
         self.proxies          = proxies or {}
+        self.request_headers  = request_headers or {}
 
         self._templates = self._load_templates()
         self._client    = HttpClient(
             timeout=timeout,
             follow_redirects=follow_redirects,
             proxies=proxies,
+            default_headers=self.request_headers,
         )
 
     # ──────────────────────────────────────────────────────────────────── #
@@ -162,6 +165,7 @@ class Engine:
             timeout = self.timeout,
             proxy   = proxy,
             verbose = self.reporter.verbose,
+            headers = self.request_headers,
         )
         self.reporter.info("  [crawl] {} raw URL(s) found".format(len(all_urls)))
 

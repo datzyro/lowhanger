@@ -70,17 +70,20 @@ class HttpClient:
         verify_ssl:       bool = False,
         follow_redirects: bool = False,
         proxies:          dict = None,
+        default_headers:  dict = None,
     ):
         self.timeout          = timeout
         self.user_agent       = user_agent
         self.verify_ssl       = verify_ssl
         self.follow_redirects = follow_redirects
         self.proxies          = proxies or {}
+        self.default_headers  = default_headers or {}
 
         self._session = requests.Session()
         self._session.verify  = self.verify_ssl
         self._session.proxies = self.proxies
         self._session.headers.update({"User-Agent": self.user_agent})
+        self._session.headers.update(self.default_headers)
 
         # Disable built-in redirect following — we handle it ourselves
         self._session.max_redirects = MAX_REDIRECTS

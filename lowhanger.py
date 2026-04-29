@@ -38,6 +38,41 @@ ALL_TEMPLATES = [
 ]
 
 
+def parse_request_headers(header_values: list, header_files: list) -> dict:
+    """
+    Parse repeatable header inputs into a dict.
+
+    Supported sources:
+      - --header "Name: Value" (repeatable)
+      - --header-file <path>      (repeatable; one Name: Value per line)
+    """
+    lines = []
+    lines.extend(header_values or [])
+
+    for fpath in (header_files or []):
+        with open(fpath) as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    lines.append(line)
+
+    headers = {}
+    for raw in lines:
+        if ":" not in raw:
+            raise ValueError("Invalid header format '{}'. Use 'Name: Value'.".format(raw))
+
+        name, value = raw.split(":", 1)
+        name = name.strip()
+        value = value.strip()
+
+        if not name:
+            raise ValueError("Invalid header name in '{}'".format(raw))
+
+        headers[name] = value
+
+    return headers
+
+
 def parse_args():
     p = argparse.ArgumentParser(
         prog="lowhanger",
@@ -83,6 +118,12 @@ def parse_args():
                     help="Per-request timeout in seconds (default: 10)")
     sg.add_argument("--proxy", dest="proxy", metavar="URL", default=None,
                     help="HTTP proxy (e.g. http://127.0.0.1:8080)")
+    sg.add_argument("--header", dest="headers", metavar="'Name: Value'",
+                    action="append", default=[],
+                    help="Custom request header, repeatable (e.g. --header 'Authorization: Bearer <token>')")
+    sg.add_argument("--header-file", dest="header_files", metavar="FILE",
+                    action="append", default=[],
+                    help="File with request headers (one 'Name: Value' per line, repeatable)")
     sg.add_argument("--follow-redirects", dest="follow_redirects",
                     action="store_true", default=False)
 
@@ -127,6 +168,18 @@ def main():
         proxies = {"http": args.proxy, "https": args.proxy}
         reporter.info("Proxy: {}".format(args.proxy))
 
+    try:
+        request_headers = parse_request_headers(args.headers, args.header_files)
+    except FileNotFoundError as e:
+        reporter.error(str(e))
+        sys.exit(1)
+    except ValueError as e:
+        reporter.error(str(e))
+        sys.exit(1)
+
+    if request_headers:
+        reporter.info("Custom request headers: {}".format(", ".join(sorted(request_headers.keys()))))
+
     engine = Engine(
         reporter         = reporter,
         template_filter  = args.templates,
@@ -135,6 +188,7 @@ def main():
         timeout          = args.timeout,
         follow_redirects = args.follow_redirects,
         proxies          = proxies,
+        request_headers  = request_headers,
     )
 
     # Apply canary override

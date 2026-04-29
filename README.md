@@ -23,6 +23,14 @@ python lowhanger.py -t https://example.com \
 
 # Override crawl depth across all modules
 python lowhanger.py -t https://example.com --crawl-depth 5
+
+# Authenticated scan with headers
+python lowhanger.py -t https://example.com \
+  --header "Authorization: Bearer <token>" \
+  --header "Cookie: sessionid=<value>"
+
+# Load headers from file (one Name: Value per line)
+python lowhanger.py -t https://example.com --header-file headers.txt
 ```
 
 ## Templates

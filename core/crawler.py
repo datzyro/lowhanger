@@ -30,25 +30,25 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def crawl(target, depth=3, timeout=10, rate_limit=50,
-          proxy=None, verbose=False, max_urls=500) -> list:
+          proxy=None, verbose=False, max_urls=500, headers=None) -> list:
     """
     Crawl the target and return a de-duplicated list of URL strings.
 
     Tries katana first; falls back to built-in BFS crawler.
     """
     if shutil.which("katana"):
-        return _crawl_katana(target, depth, timeout, rate_limit, proxy, verbose, max_urls)
+        return _crawl_katana(target, depth, timeout, rate_limit, proxy, verbose, max_urls, headers)
     else:
         if verbose:
             print("[~] katana not found — using built-in crawler (install katana for better coverage)")
-        return _crawl_builtin(target, depth, timeout, proxy, max_urls)
+        return _crawl_builtin(target, depth, timeout, proxy, max_urls, headers)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # katana wrapper
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _crawl_katana(target, depth, timeout, rate_limit, proxy, verbose, max_urls) -> list:
+def _crawl_katana(target, depth, timeout, rate_limit, proxy, verbose, max_urls, headers=None) -> list:
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
     tmp.close()
 
@@ -66,6 +66,9 @@ def _crawl_katana(target, depth, timeout, rate_limit, proxy, verbose, max_urls) 
     ]
     if proxy:
         cmd += ["-proxy", proxy]
+
+    for name, value in (headers or {}).items():
+        cmd += ["-H", "{}: {}".format(name, value)]
 
     try:
         result = subprocess.run(
@@ -103,7 +106,7 @@ _HREF_RE  = re.compile(r'href=["\']([^"\'>\s]+)', re.IGNORECASE)
 _SRC_RE   = re.compile(r'src=["\']([^"\'>\s]+)',  re.IGNORECASE)
 _ACTION_RE= re.compile(r'action=["\']([^"\'>\s]+)', re.IGNORECASE)
 
-def _crawl_builtin(target, depth, timeout, proxy, max_urls) -> list:
+def _crawl_builtin(target, depth, timeout, proxy, max_urls, headers=None) -> list:
     base_url  = str(target)
     parsed    = urllib.parse.urlparse(base_url)
     base_host = parsed.netloc
@@ -115,6 +118,8 @@ def _crawl_builtin(target, depth, timeout, proxy, max_urls) -> list:
     session.headers["User-Agent"] = (
         "Mozilla/5.0 (compatible; lowhanger-crawler/1.0)"
     )
+    if headers:
+        session.headers.update(headers)
 
     visited  = set()
     found    = []
