@@ -1,4 +1,4 @@
-#  lowhanger
+# lowhanger
 
 Template-based low-hanging fruit vulnerability scanner for pentesters.
 
@@ -7,36 +7,22 @@ Template-based low-hanging fruit vulnerability scanner for pentesters.
 Both tools are auto-detected from `$PATH`. If absent, graceful fallbacks are used.
 
 ```bash
-
 # katana (endpoint crawler)
-
 go install github.com/projectdiscovery/katana/cmd/katana@latest
 
-
-
 # testssl.sh (TLS scanner)
-
 git clone https://github.com/drwetter/testssl.sh
 
 # add testssl.sh to PATH or set testssl_path in templates/ssl-check.yaml
-
-
-
-ln -s ~/testssl.sh/testssl.sh /usr/local/bin/testssl.sh 
-
-
+ln -s ~/testssl.sh/testssl.sh /usr/local/bin/testssl.sh
 
 # Install playwright and chromium for better Clickjacking check
-
 pip install playwright
-
 playwright install chromium
-
 ```
 
-
-
 ## Usage
+
 ```bash
 pip install -r requirements.txt
 
@@ -64,7 +50,8 @@ python lowhanger.py -t https://example.com \
 
 # Load headers from file (one Name: Value per line)
 python lowhanger.py -t https://example.com --header-file headers.txt
-```## External tools (optional)
+```
+
 
 ## Architecture
 
