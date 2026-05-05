@@ -143,7 +143,7 @@ class Reporter:
 
     def _print_finding(self, f: Finding):
         col   = SEVERITY_COLOUR.get(f.severity, Fore.WHITE)
-        label = "[{}]".format(f.severity.upper())
+        label = "[Finding]"
         print("\n{}{}{} {}{}{}".format(
             col, label, Style.RESET_ALL,
             Style.BRIGHT, f.name, Style.RESET_ALL,
@@ -184,7 +184,7 @@ class Reporter:
             else:
                 with open(self.output_file, "w") as fh:
                     for f in self.findings:
-                        fh.write("[{}] {}\n".format(f.severity.upper(), f.name))
+                        fh.write("[Finding] {}\n".format(f.name))
                         fh.write("  {:<12}: {}\n".format("Target",    _strip(f.target)))
                         fh.write("  {:<12}: {}\n".format("Technique", _strip(f.technique)))
                         # Multiline affected

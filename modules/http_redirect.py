@@ -3,14 +3,10 @@ modules/http_redirect.py
 Module: HttpRedirectModule
 """
 
-import re
 from modules.base     import BaseModule
 from core.target      import Target
 from core.http_client import HttpClient
 from core.reporter    import Reporter, Finding
-
-_HSTS_MAX_AGE_RE = re.compile(r"max-age\s*=\s*(\d+)", re.IGNORECASE)
-_MIN_HSTS_AGE    = 31536000
 
 
 class HttpRedirectModule(BaseModule):
@@ -90,41 +86,5 @@ class HttpRedirectModule(BaseModule):
                 cause       = "Strict-Transport-Security header absent from HTTPS response",
             ))
             return
-
-        ma_match = _HSTS_MAX_AGE_RE.search(hsts)
-        if ma_match:
-            max_age = int(ma_match.group(1))
-            if max_age < _MIN_HSTS_AGE:
-                reporter.add_finding(Finding(
-                    template_id = self.id,
-                    name        = "HSTS max-age Too Short",
-                    severity    = "low",
-                    target      = target.url,
-                    affected    = https_url,
-                    technique   = "HTTPS response header check",
-                    cause       = "Strict-Transport-Security: {}  (max-age={}, minimum required: {})".format(
-                        hsts, max_age, _MIN_HSTS_AGE),
-                ))
-        else:
-            reporter.add_finding(Finding(
-                template_id = self.id,
-                name        = "HSTS max-age Directive Missing",
-                severity    = "medium",
-                target      = target.url,
-                affected    = https_url,
-                technique   = "HTTPS response header check",
-                cause       = "Strict-Transport-Security: {}  (no max-age directive)".format(hsts),
-            ))
-
-        if "includesubdomains" not in hsts.lower():
-            reporter.add_finding(Finding(
-                template_id = self.id,
-                name        = "HSTS Missing includeSubDomains",
-                severity    = "info",
-                target      = target.url,
-                affected    = https_url,
-                technique   = "HTTPS response header check",
-                cause       = "Strict-Transport-Security: {}  (includeSubDomains absent)".format(hsts),
-            ))
 
         reporter.info("[http-redirect] Done.")
